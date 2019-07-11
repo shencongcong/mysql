@@ -33,7 +33,7 @@ class CoMysql
 
     protected $_swoole_db;
 
-    private function __construct($config)
+    public function __construct($config)
     {
         // 实例化数据库
         try {
