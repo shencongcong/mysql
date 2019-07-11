@@ -8,10 +8,11 @@
 
 namespace Shencongcong\Mysql;
 
+use Shencongcong\Mysql\Exceptions\GatewayErrorException;
 use Shencongcong\Mysql\Exceptions\InvalidArgumentException;
 use Shencongcong\Mysql\Exceptions\PdoErrorException;
 
-class Mysql
+class CoMysql
 {
 
     private static $instance;
@@ -30,17 +31,16 @@ class Mysql
 
     protected $_debug = false;
 
-    protected $_pdo;
+    protected $_swoole_db;
 
     private function __construct($config)
     {
         // 实例化数据库
         try {
-            $this->_pdo = new \PDO('mysql:host=' . $config['host'] . ';port=' . $config['port'] . ';dbname=' . $config['database'], $config['user'], $config['password'], [\PDO::ATTR_PERSISTENT => true]);
-
-            $this->_pdo->exec("set names 'utf8'");
-        } catch (\PDOException $e) {
-            throw  new \PDOException($e->getMessage(), $e->getCode());
+            $this->_swoole_db = new \Swoole\Coroutine\MySQL();
+            $this->_swoole_db->connect($config);
+        } catch (GatewayErrorException $e) {
+            throw  new GatewayErrorException($e->getMessage(), $e->getCode());
         }
     }
 
@@ -48,7 +48,7 @@ class Mysql
     {
         // 获取单例
         if ( !(self::$instance instanceof self) ) {
-            self::$instance = new Mysql($config);
+            self::$instance = new CoMysql($config);
         }
 
         return self::$instance;
@@ -137,9 +137,9 @@ class Mysql
         }
         $update = trim($update, ',');
         $sql = "insert into {$this->_table} set $update;";
-        $this->_exec($sql);
+        $res = $this->_exec($sql);
 
-        return $this->_pdo->lastInsertId();
+        return $res;
     }
 
     public function update($data)
@@ -171,18 +171,6 @@ class Mysql
         }
     }
 
-    public function query($sql, $param = [])
-    {
-        //禁用prepared statements的仿真效果 确保SQL语句和相应的值在传递到mysql服务器之前是不会被PHP解析
-        $this->_pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, false);
-
-        $pre = $this->_pdo->prepare($sql);
-        $pre->execute($param);
-        if ( $this->_error() ) {
-            return $pre->fetchAll(\PDO::FETCH_ASSOC);
-        }
-    }
-
     protected function _exec($sql)
     {
         if ( $this->_debug ) {
@@ -190,10 +178,9 @@ class Mysql
             exit();
         }
         else {
-            $res = $this->_pdo->exec($sql);
-            if ( $this->_error() ) {
-                return $res;
-            }
+            $res = $this->_swoole_db->query($sql);
+
+            return $res;
         }
     }
 
@@ -205,20 +192,9 @@ class Mysql
             exit();
         }
         else {
-            $res = $this->_pdo->query($sql);
-            if ( $this->_error() ) {
-                return $res->fetchAll(\PDO::FETCH_ASSOC);
-            }
-        }
-    }
+            $res = $this->_swoole_db->query($sql);
 
-    protected function _error()
-    {
-        if ( $this->_pdo->errorCode() == 00000 ) {
-            return true;
-        }
-        else {
-            throw new PdoErrorException($this->_pdo->errorInfo()[2], $this->_pdo->errorCode());
+            return $res;
         }
     }
 
