@@ -17,6 +17,20 @@ class CoMysql
 
     private static $instance;
 
+    private $_min=10;
+
+    private $_max=100;
+
+    private $_count;
+
+    private $_connections;
+
+    private $_db_config=[];
+
+    private $_spare_time=10 * 3600; //用于空闲连接回收判断
+
+    private $_inited = false;
+
     protected $_table = '';
 
     protected $_field = '*';
@@ -33,26 +47,127 @@ class CoMysql
 
     protected $_swoole_db;
 
-    public function __construct($config)
+    public function __construct($dbConfig,$config)
     {
         // 实例化数据库
         try {
-            $this->_swoole_db = new \Swoole\Coroutine\MySQL();
-            $this->_swoole_db->connect($config);
+            $this->_db_config = $dbConfig;
+            $this->_min = $config['min'];
+            $this->_max = $config['max'];
+            $this->_spare_time = $config['spareTime'];
+            $this->_connections = new \Swoole\Coroutine\Channel($this->_max + 1);
         } catch (GatewayErrorException $e) {
             throw  new GatewayErrorException($e->getMessage(), $e->getCode());
         }
     }
 
-    public static function getDbInstance($config)
+    public static function getDbInstance($dbConfig,$config)
     {
         // 获取单例
         if ( !(self::$instance instanceof self) ) {
-            self::$instance = new CoMysql($config);
+            self::$instance = new CoMysql($dbConfig,$config);
         }
 
         return self::$instance;
     }
+
+    public function getConnection($timeOut = 3)
+    {
+        $obj = null;
+        if ($this->_connections->isEmpty()) {
+            if ($this->_count < $this->_max) {//连接数没达到最大，新建连接入池
+                $this->_count++;
+                $obj = $this->createObject();
+            } else {
+                $obj = $this->_connections->pop($timeOut);//timeout为出队的最大的等待时间
+            }
+        } else {
+            $obj = $this->_connections->pop($timeOut);
+        }
+        return $obj;
+    }
+
+    protected function createObject()
+    {
+        $obj = null;
+        $db = $this->createDb();
+        if($db){
+            $obj = [
+                'last_used_time' => time(),
+                'db' => $db,
+            ];
+        }
+
+        return $obj;
+    }
+
+    protected function createDb()
+    {
+        $db = new \Swoole\Coroutine\Mysql();
+        $db->connect(
+            $this->_db_config
+        );
+
+        return $db;
+    }
+
+    public function free($obj)
+    {
+        if ($obj) {
+            $this->_connections->push($obj);
+        }
+    }
+
+    public function init()
+    {
+        if($this->_inited){
+            return null;
+        }
+        for ($i=0; $i<$this->_min;$i++){
+            $obj = $this->createObject();
+            $this->_count++;
+            $this->_connections->push($obj);
+        }
+
+        return $this;
+    }
+
+    /**
+     * 处理空闲连接
+     *
+     * @author danielshen
+     * @datetime   2019-07-12 16:30
+     */
+    public function gcSpareObject()
+    {
+        //大约2分钟检测一次连接
+        \Swoole\Timer::tick(120000, function () {
+            $list = [];
+            /*echo "开始检测回收空闲链接" . $this->connections->length() . PHP_EOL;*/
+            if ($this->_connections->length() < intval($this->_max * 0.5)) {
+                echo "请求连接数还比较多，暂不回收空闲连接\n";
+            }
+            while (true) {
+                if (!$this->_connections->isEmpty()) {
+                    $obj = $this->_connections->pop(0.001);
+                    $last_used_time = $obj['last_used_time'];
+                    if ($this->_count > $this->_min && (time() - $last_used_time > $this->_spare_time)) {//回收
+                        $this->_count--;
+                    } else {
+                        array_push($list, $obj);
+                    }
+                } else {
+                    break;
+                }
+            }
+            foreach ($list as $item) {
+                $this->_connections->push($item);
+            }
+            unset($list);
+        });
+    }
+
+
 
     public function table($table)
     {
