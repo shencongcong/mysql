@@ -25,6 +25,34 @@ $config = [
           'password' => 'root',
           'port'     => '3306',
          ],
+$db = Mysql::getDbInstance($config);
+
+### 增
+$db->table('users')->insert(['user'=>'xxx','pwd'=>'xxx']);
+
+### 删
+$db->table('users')->where(['user'=>'xxx'])->delete();
+
+### 改
+$db->table('users')->where('user'=>'xxx')->update(['name'=>'xxx']);
+
+### 查一条
+$db->table('users')->where(['user'=>'xxx'])->find();
+
+### 查全部
+$db->table('users')->where(['user'=>'xxx'])->select();
+
+### 字段查找
+$db->table('users')->field('user')->where(['user'=>'xxx'])->select();
+
+### 排序
+$db->table('users')->where(['user'=>'xxx'])->order('id desc')->select();
+
+### join
+$db->table('users')->join('user_info on user_info.user_id=user.id')->select();
+
+### 执行原生sql
+$db->table('users')->query('select * from users');
 
 ```
 
