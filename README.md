@@ -3,6 +3,10 @@
 <p align="center"> a esay method operating mysql.</p>
 
 
+## 环境需求
+
+- PHP >= 5.6
+
 ## Installing
 
 ```shell
@@ -11,7 +15,18 @@ $ composer require shencongcong/mysql -vvv
 
 ## Usage
 
-TODO
+```php
+use Shencongcong\Mysql\Mysql
+
+$config = [
+          'host'     => '10.0.0.180',
+          'database' => 'db',
+          'user'     => 'root',
+          'password' => 'root',
+          'port'     => '3306',
+         ],
+
+```
 
 ## Contributing
 

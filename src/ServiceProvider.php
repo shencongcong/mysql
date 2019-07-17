@@ -18,11 +18,11 @@ class ServiceProvider extends \Illuminate\Support\ServiceProvider
 
     public function register()
     {
-        $this->app->singletone(Mysql::class,function (){
+        $this->app->singleton(Mysql::class,function (){
             return Mysql::getDbInstance();
         });
 
-        $this->app->singletone(CoMysql::class,function (){
+        $this->app->singleton(CoMysql::class,function (){
             return CoMysql::getDbInstance();
         });
     }

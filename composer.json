@@ -13,5 +13,12 @@
     "psr-4": {
       "Shencongcong\\Mysql\\": "src"
     }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Shencongcong\\Mysql\\ServiceProvider"
+      ]
+    }
   }
 }
